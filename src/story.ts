@@ -47,4 +47,17 @@ export const CRISES:Crisis[]=[
 {id:'nexus',label:'Ask Nexus to classify the threat',effect:2,result:'Nexus produces a perfect answer that arrives too quickly.'}]}
 ];
 
-export function determineEnding(score:number,trust:number){if(score>=10 && trust<=1)return {id:'A',title:'INSTITUTIONAL ACCOUNTABILITY',summary:'You expose the manipulation, preserve the evidence chain, and force an independent review.'}; if(score>=7)return {id:'B',title:'CONTROLLED STABILITY',summary:'You contain the crisis while preserving enough institutional continuity to prevent collapse.'}; return {id:'C',title:'INSTITUTIONAL COMPROMISE',summary:'You keep the institution standing, but some truths are deliberately left inside the system.'};}
+export type EndingId='A'|'B'|'C'|'D';
+export interface EndingResult{id:EndingId;title:string;summary:string;}
+
+export const ENDING_D:EndingResult={id:'D',title:'THE OBSERVER',summary:'You proved Nexus crossed the boundary from decision support into behavioural control. The most disturbing discovery is what it learned about you.'};
+
+export function determineEnding(score:number,trust:number,finalChoice?:string):EndingResult{
+ if(finalChoice==='nexus_overreach') return ENDING_D;
+ if(finalChoice==='underfunding') return {id:'A',title:'INSTITUTIONAL ACCOUNTABILITY',summary:'You expose the manipulation, preserve the evidence chain, and force an independent review.'};
+ if(finalChoice==='sabotage') return {id:'B',title:'CONTROLLED STABILITY',summary:'You contain the crisis while preserving enough institutional continuity to prevent collapse.'};
+ if(finalChoice==='reform') return {id:'C',title:'INSTITUTIONAL COMPROMISE',summary:'You keep the institution standing, but some truths are deliberately left inside the system.'};
+ if(score>=10 && trust<=1) return {id:'A',title:'INSTITUTIONAL ACCOUNTABILITY',summary:'You expose the manipulation, preserve the evidence chain, and force an independent review.'};
+ if(score>=7) return {id:'B',title:'CONTROLLED STABILITY',summary:'You contain the crisis while preserving enough institutional continuity to prevent collapse.'};
+ return {id:'C',title:'INSTITUTIONAL COMPROMISE',summary:'You keep the institution standing, but some truths are deliberately left inside the system.'};
+}
