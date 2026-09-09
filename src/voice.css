@@ -1,0 +1,15 @@
+/* AFTERLIGHT — lightweight 2D speaking animation */
+.speaking-avatar{position:relative;overflow:visible;animation:al-idle-float 2.8s ease-in-out infinite}
+.speaking-avatar.speaking{animation:al-speaking-bob .2s ease-in-out infinite alternate}
+.speaking-avatar::before{content:"";position:absolute;inset:-6px;border:1px solid rgba(84,213,193,.12);border-radius:50%;opacity:0;transition:opacity .15s ease}
+.speaking-avatar.speaking::before{opacity:1;box-shadow:0 0 18px rgba(84,213,193,.12)}
+.speaking-avatar .mouth{position:absolute;left:50%;bottom:12px;transform:translateX(-50%);width:9px;height:2px;border-radius:50%;background:#f1c76a;opacity:.18}
+.speaking-avatar.speaking .mouth{height:6px;opacity:.78;box-shadow:0 0 10px rgba(241,199,106,.55);animation:al-mouth 120ms ease-in-out infinite alternate}
+.voice-state{display:inline-flex;align-items:center;gap:6px;margin-top:10px;color:#687483;font-size:9px;letter-spacing:.12em}
+.voice-state.live{color:#54d5c1}
+.dialogue-speaking{animation:al-dialogue-breathe .18s ease-in-out infinite alternate}
+@keyframes al-idle-float{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
+@keyframes al-speaking-bob{from{transform:translateY(0) scale(1)}to{transform:translateY(-1px) scale(1.025)}}
+@keyframes al-mouth{from{transform:translateX(-50%) scaleY(.65)}to{transform:translateX(-50%) scaleY(1.25)}}
+@keyframes al-dialogue-breathe{from{opacity:.96}to{opacity:1}}
+@media (prefers-reduced-motion:reduce){.speaking-avatar,.speaking-avatar.speaking,.speaking-avatar.speaking .mouth,.dialogue-speaking{animation:none!important}}
