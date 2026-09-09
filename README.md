@@ -1,14 +1,15 @@
 # AFTERLIGHT — CASE 01: THE REVIEW
 
-A clean React + TypeScript prototype for a Nigerian institutional psychological thriller.
+Clean engineering build for the AFTERLIGHT Nigerian psychological thriller.
 
-## Core loop
+Core flow:
 
-MENU → START CASE → TACTICAL COMMAND → EVIDENCE → PERSONNEL → NEXUS → CRISIS → FURTHER INVESTIGATION → FINAL DECISION → 48-HOUR BOARD REVIEW → ENDING
-
-## Notes
-
-- No external game assets are required for the prototype.
-- Audio feedback is generated procedurally in-browser.
-- The game is intentionally 2D and responsive.
-- Character dialogue is represented as readable in-game voice-ready scripts; no external voice service is required.
+MENU
+→ HOW TO PLAY
+→ START CASE
+→ INVESTIGATION
+→ CRISIS
+→ FURTHER INVESTIGATION
+→ FINAL DECISION
+→ 48-HOUR BOARD REVIEW
+→ ENDING
