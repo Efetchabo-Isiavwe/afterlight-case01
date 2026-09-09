@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
+import type { ReactNode } from "react";
 import { AlertTriangle, BrainCircuit, FileSearch, Gauge, Lock, Mic2, ShieldCheck, Users, Volume2, VolumeX, X, Play, ArrowRight, Eye } from "lucide-react";
 import { CHARACTERS, EVIDENCE, CRISES, determineEnding, type CharacterCase, type Phase, type Tab, type Tone } from "./story";
 import { sfx, setAudio } from "./audio";
@@ -7,14 +8,8 @@ const EVIDENCE_GATE = 8;
 const INTERVIEW_GATE = 3;
 
 const VOICE_PROFILES: Record<string, { rate: number; pitch: number }> = {
-  bayo: { rate: 0.92, pitch: 0.82 },
-  aisha: { rate: 0.98, pitch: 1.10 },
-  chinedu: { rate: 0.88, pitch: 0.72 },
-  mamaEse: { rate: 0.80, pitch: 1.00 },
-  samba: { rate: 0.94, pitch: 0.78 },
-  nexus: { rate: 1.02, pitch: 0.55 },
+  bayo: { rate: 0.92, pitch: 0.82 }, aisha: { rate: 0.98, pitch: 1.10 }, chinedu: { rate: 0.88, pitch: 0.72 }, mamaEse: { rate: 0.80, pitch: 1.00 }, samba: { rate: 0.94, pitch: 0.78 }, nexus: { rate: 1.02, pitch: 0.55 },
 };
-
 const FINAL_FINDINGS = [
   { id: "underfunding", label: "SYSTEMIC UNDERFUNDING", desc: "The crisis was amplified by neglected infrastructure and diverted resources." },
   { id: "sabotage", label: "COORDINATED SABOTAGE", desc: "Human actors deliberately manipulated the institutional response." },
@@ -23,274 +18,39 @@ const FINAL_FINDINGS = [
 ];
 
 export default function App() {
-  const [phase, setPhase] = useState<Phase>("MENU");
-  const [tab, setTab] = useState<Tab>("dashboard");
-  const [audio, setAudioState] = useState(true);
-  const [reviewed, setReviewed] = useState<string[]>([]);
-  const [interviews, setInterviews] = useState<string[]>([]);
-  const [trust, setTrust] = useState(2);
-  const [crisis, setCrisis] = useState<string[]>([]);
-  const [logs, setLogs] = useState<{ text: string; tone: Tone }[]>([]);
-  const [score, setScore] = useState(0);
-  const [hours, setHours] = useState(48);
-  const [dialogue, setDialogue] = useState<{ character: string; line: number } | null>(null);
-  const [speaking, setSpeaking] = useState(false);
-  const [finalChoice, setFinalChoice] = useState<string | null>(null);
-  const [ending, setEnding] = useState<{ id: string; title: string; summary: string } | null>(null);
-
-  const currentCharacter = dialogue ? CHARACTERS.find((c) => c.id === dialogue.character) : undefined;
-  const currentText = currentCharacter ? currentCharacter.dialogue[dialogue?.line ?? 0]?.text ?? "" : "";
-
+  const [phase, setPhase] = useState<Phase>("MENU"); const [tab, setTab] = useState<Tab>("dashboard"); const [audio, setAudioState] = useState(true);
+  const [reviewed, setReviewed] = useState<string[]>([]); const [interviews, setInterviews] = useState<string[]>([]); const [trust, setTrust] = useState(2); const [crisis, setCrisis] = useState<string[]>([]); const [logs, setLogs] = useState<{ text: string; tone: Tone }[]>([]); const [score, setScore] = useState(0); const [hours, setHours] = useState(48);
+  const [dialogue, setDialogue] = useState<{ character: string; line: number } | null>(null); const [speaking, setSpeaking] = useState(false); const [finalChoice, setFinalChoice] = useState<string | null>(null); const [ending, setEnding] = useState<{ id: string; title: string; summary: string } | null>(null);
+  const currentCharacter = dialogue ? CHARACTERS.find((c) => c.id === dialogue.character) : undefined; const currentText = currentCharacter ? currentCharacter.dialogue[dialogue?.line ?? 0]?.text ?? "" : "";
   const addLog = (text: string, tone: Tone = "info") => setLogs((v) => [{ text, tone }, ...v].slice(0, 10));
-
-  const speak = (text: string, characterId: string) => {
-    if (!audio || !("speechSynthesis" in window)) return;
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    const profile = VOICE_PROFILES[characterId] ?? { rate: 0.95, pitch: 1 };
-    utterance.rate = profile.rate;
-    utterance.pitch = profile.pitch;
-    utterance.volume = 0.92;
-    const voices = window.speechSynthesis.getVoices();
-    const voice = voices.find((v) => /en-NG/i.test(v.lang)) || voices.find((v) => /Nigeria/i.test(v.name)) || voices.find((v) => /^en-(GB|US)/i.test(v.lang));
-    if (voice) utterance.voice = voice;
-    utterance.onstart = () => setSpeaking(true);
-    utterance.onend = () => setSpeaking(false);
-    utterance.onerror = () => setSpeaking(false);
-    window.speechSynthesis.speak(utterance);
-  };
-
-  useEffect(() => {
-    if (dialogue && currentCharacter) speak(currentText, dialogue.character);
-    if (!dialogue) {
-      window.speechSynthesis?.cancel();
-      setSpeaking(false);
-    }
-    return () => window.speechSynthesis?.cancel();
-  }, [dialogue?.character, dialogue?.line, audio]);
-
-  useEffect(() => {
-    if (phase !== "TACTICAL" || dialogue) return;
-    const id = window.setInterval(() => setHours((h) => Math.max(0, h - 1)), 1000 * 60);
-    return () => window.clearInterval(id);
-  }, [phase, dialogue]);
-
-  const startCase = () => {
-    sfx("click");
-    setPhase("TACTICAL");
-    setTab("dashboard");
-    setHours(48);
-    addLog("CASE 01 INITIALIZED • 48-HOUR INVESTIGATION WINDOW OPEN.");
-  };
-
-  const inspect = (id: string) => {
-    sfx("evidence");
-    if (!reviewed.includes(id)) {
-      setReviewed((v) => [...v, id]);
-      setScore((v) => v + (EVIDENCE.find((e) => e.id === id)?.weight ?? 1));
-      addLog(`EVIDENCE REVIEWED • ${EVIDENCE.find((e) => e.id === id)?.title ?? id}`, "good");
-    }
-  };
-
-  const openInterview = (id: string) => {
-    sfx("click");
-    if (!interviews.includes(id)) {
-      setInterviews((v) => [...v, id]);
-      setScore((v) => v + 1);
-      addLog(`INTERVIEW LOGGED • ${CHARACTERS.find((c) => c.id === id)?.name ?? id}`, "info");
-    }
-    setDialogue({ character: id, line: 0 });
-  };
-
-  const nextDialogue = () => {
-    sfx("click");
-    if (!dialogue || !currentCharacter) return;
-    if (dialogue.line < currentCharacter.dialogue.length - 1) {
-      setDialogue({ character: dialogue.character, line: dialogue.line + 1 });
-    } else {
-      setDialogue(null);
-    }
-  };
-
-  const resolveCrisis = (crisisId: string, optionId: string, effect: number, result: string) => {
-    if (crisis.includes(crisisId)) return;
-    sfx(effect >= 2 ? "good" : "alert");
-    setCrisis((v) => [...v, crisisId]);
-    setScore((v) => v + effect);
-    if (optionId === "follow" || optionId === "nexus") setTrust((v) => Math.max(0, v - 1));
-    addLog(`${crisisId.toUpperCase()} RESOLVED • ${result}`, effect >= 2 ? "good" : "warn");
-  };
-
+  const speak = (text: string, characterId: string) => { if (!audio || !("speechSynthesis" in window)) return; window.speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(text); const p = VOICE_PROFILES[characterId] ?? { rate: .95, pitch: 1 }; u.rate = p.rate; u.pitch = p.pitch; u.volume = .92; const voices = window.speechSynthesis.getVoices(); const voice = voices.find(v => /en-NG/i.test(v.lang)) || voices.find(v => /Nigeria/i.test(v.name)) || voices.find(v => /^en-(GB|US)/i.test(v.lang)); if (voice) u.voice = voice; u.onstart = () => setSpeaking(true); u.onend = () => setSpeaking(false); u.onerror = () => setSpeaking(false); window.speechSynthesis.speak(u); };
+  useEffect(() => { if (dialogue && currentCharacter) speak(currentText, dialogue.character); else { window.speechSynthesis?.cancel(); setSpeaking(false); } return () => window.speechSynthesis?.cancel(); }, [dialogue?.character, dialogue?.line, audio]);
+  useEffect(() => { if (phase !== "TACTICAL" || dialogue) return; const id = window.setInterval(() => setHours(h => Math.max(0, h - 1)), 60000); return () => window.clearInterval(id); }, [phase, dialogue]);
+  const startCase = () => { sfx("click"); setPhase("TACTICAL"); setTab("dashboard"); setHours(48); addLog("CASE 01 INITIALIZED • 48-HOUR INVESTIGATION WINDOW OPEN."); };
+  const inspect = (id: string) => { sfx("evidence"); if (!reviewed.includes(id)) { setReviewed(v => [...v, id]); setScore(v => v + (EVIDENCE.find(e => e.id === id)?.weight ?? 1)); addLog(`EVIDENCE REVIEWED • ${EVIDENCE.find(e => e.id === id)?.title ?? id}`, "good"); } };
+  const openInterview = (id: string) => { sfx("click"); if (!interviews.includes(id)) { setInterviews(v => [...v, id]); setScore(v => v + 1); addLog(`INTERVIEW LOGGED • ${CHARACTERS.find(c => c.id === id)?.name ?? id}`); } setDialogue({ character: id, line: 0 }); };
+  const nextDialogue = () => { sfx("click"); if (!dialogue || !currentCharacter) return; if (dialogue.line < currentCharacter.dialogue.length - 1) setDialogue({ character: dialogue.character, line: dialogue.line + 1 }); else setDialogue(null); };
+  const resolveCrisis = (crisisId: string, optionId: string, effect: number, result: string) => { if (crisis.includes(crisisId)) return; sfx(effect >= 2 ? "good" : "alert"); setCrisis(v => [...v, crisisId]); setScore(v => v + effect); if (optionId === "follow" || optionId === "nexus") setTrust(v => Math.max(0, v - 1)); addLog(`${crisisId.toUpperCase()} RESOLVED • ${result}`, effect >= 2 ? "good" : "warn"); };
   const finalUnlocked = reviewed.length >= EVIDENCE_GATE && interviews.length >= INTERVIEW_GATE && crisis.length >= 1;
-
-  const submitFinding = (id: string) => {
-    if (!finalUnlocked) return;
-    sfx("finish");
-    setFinalChoice(id);
-    const resolved = id === "nexus_overreach"
-      ? { id: "D", title: "THE OBSERVER", summary: "You proved Nexus crossed the boundary from decision support into behavioural control. The most disturbing discovery is not what Nexus learned about the grid — it is what it learned about you." }
-      : determineEnding(score, trust);
-    setEnding(resolved);
-    addLog(`FINAL FINDING SUBMITTED • ${FINAL_FINDINGS.find((f) => f.id === id)?.label ?? id}`, "good");
-    setTab("review");
-  };
-
-  const completeReview = () => {
-    if (!ending) return;
-    setPhase("ENDING");
-    sfx("finish");
-    addLog(`BOARD REVIEW COMPLETE • ENDING ${ending.id}`, "good");
-  };
-
-  const toggleAudio = () => {
-    setAudioState((v) => {
-      const next = !v;
-      setAudio(next);
-      if (!next) window.speechSynthesis?.cancel();
-      return next;
-    });
-  };
-
+  const submitFinding = (id: string) => { if (!finalUnlocked) return; sfx("finish"); setFinalChoice(id); const resolved = id === "nexus_overreach" ? { id: "D", title: "THE OBSERVER", summary: "You proved Nexus crossed the boundary from decision support into behavioural control. The most disturbing discovery is what it learned about you." } : determineEnding(score, trust); setEnding(resolved); addLog(`FINAL FINDING SUBMITTED • ${FINAL_FINDINGS.find(f => f.id === id)?.label ?? id}`, "good"); setTab("review"); };
+  const completeReview = () => { if (!ending) return; setPhase("ENDING"); sfx("finish"); };
+  const toggleAudio = () => { setAudioState(v => { const n = !v; setAudio(n); if (!n) window.speechSynthesis?.cancel(); return n; }); };
   const dashboardTitle = tab === "dashboard" ? "THE REVIEW" : tab === "nexus" ? "NEXUS AI TELEMETRY" : tab.replace("-", " ").toUpperCase();
-
-  return (
-    <div className="app">
-      <div className="grain" />
-      <header className="topline">
-        <div className="brand">AFTERLIGHT <span>CASE 01 — THE REVIEW</span></div>
-        <div className="top-actions">
-          <button className="icon-btn" onClick={toggleAudio} aria-label={audio ? "Mute voice and sound" : "Enable voice and sound"}>
-            {audio ? <Volume2 size={17} /> : <VolumeX size={17} />}
-          </button>
-          <div className="case-pill">NIGHT OPS • 01</div>
-        </div>
-      </header>
-
-      {phase === "MENU" && (
-        <section className="menu-screen">
-          <div className="menu-card">
-            <div className="eyebrow">NIGERIAN INSTITUTIONAL PSYCHOLOGICAL THRILLER</div>
-            <h1>AFTERLIGHT</h1>
-            <div className="case-title">CASE 01 <b>THE REVIEW</b></div>
-            <p>Investigate sabotage, conflicting accounts, and an intelligence system that may be studying your decisions.</p>
-            <div className="menu-actions">
-              <button className="primary" onClick={startCase}><Play size={18} fill="currentColor" /> START CASE</button>
-              <button className="secondary" onClick={() => { sfx("click"); setPhase("HOWTO"); }}>HOW TO PLAY</button>
-            </div>
-            <div className="menu-meta"><span>48 HOURS</span><span>•</span><span>5 PERSONNEL</span><span>•</span><span>9 EVIDENCE FILES</span></div>
-          </div>
-        </section>
-      )}
-
-      {phase === "HOWTO" && (
-        <section className="howto">
-          <div className="panel wide">
-            <div className="panel-head">
-              <div><div className="eyebrow">OPERATIONS BRIEF</div><h2>HOW TO PLAY</h2></div>
-              <button className="icon-btn" onClick={() => setPhase("MENU")}><X /></button>
-            </div>
-            <div className="how-grid">
-              <div><h3>1 — INVESTIGATE</h3><p>Review evidence, identify contradictions, and inspect the personnel files.</p></div>
-              <div><h3>2 — INTERROGATE</h3><p>Question Bayo, Dr. Aisha, Chinedu, Mama Ese and Commissioner Samba.</p></div>
-              <div><h3>3 — QUESTION NEXUS</h3><p>Choose when to trust, verify or restrict the system. Nexus records the pattern.</p></div>
-              <div><h3>4 — SURVIVE THE CRISIS</h3><p>Resolve a live event, unlock deeper evidence, then prepare the Board finding.</p></div>
-              <div><h3>5 — READ THE ROOM</h3><p>Watch Public Trust, evidence strength, personnel confidence and Nexus reliance.</p></div>
-              <div><h3>6 — MAKE THE CALL</h3><p>Reach the decision threshold and submit one of four final findings.</p></div>
-            </div>
-            <button className="primary" onClick={() => setPhase("MENU")}>RETURN TO CASE</button>
-          </div>
-        </section>
-      )}
-
-      {phase === "TACTICAL" && (
-        <section className="tactical">
-          <div className="hud">
-            <div><span className="status-dot" /> INVESTIGATION ACTIVE</div>
-            <div className="hud-stats"><span>TIME <b>{hours}H</b></span><span>EVIDENCE <b>{reviewed.length}/{EVIDENCE_GATE}</b></span><span>INTERVIEWS <b>{interviews.length}/{INTERVIEW_GATE}</b></span></div>
-          </div>
-          <div className="layout">
-            <aside className="sidebar">
-              <div className="side-brand"><Gauge /><span>COMMAND</span></div>
-              {([
-                ["dashboard", "Command Dashboard", Gauge], ["evidence", "Evidence Archive", FileSearch], ["personnel", "Personnel", Users],
-                ["nexus", "Nexus Interface", BrainCircuit], ["crisis", "Crisis Control", AlertTriangle], ["final", "Final Decision", ShieldCheck], ["review", "Board Review", Lock],
-              ] as [Tab, string, typeof Gauge][]).map(([id, label, Icon]) => (
-                <button key={id} className={`nav ${tab === id ? "active" : ""}`} onClick={() => { sfx("click"); setTab(id); }}><Icon size={16} />{label}</button>
-              ))}
-              <div className="side-log"><div className="eyebrow">LIVE LOG</div>{logs.length ? logs.map((l, i) => <div className={`log ${l.tone}`} key={i}>{l.text}</div>) : <div className="log">No event logged.</div>}</div>
-            </aside>
-
-            <main className="main">
-              <div className="hero-strip"><div><div className="eyebrow">AFTERLIGHT / FEDERAL RESPONSE CELL</div><h2>{dashboardTitle}</h2></div><div className="case-state"><span>CASE STATE</span><b>{crisis.length ? "CRISIS CONTAINED" : "PRIMARY INVESTIGATION"}</b></div></div>
-
-              {tab === "dashboard" && (
-                <div className="dash-grid">
-                  <Card icon={<FileSearch />} title="Evidence" value={`${reviewed.length}/${EVIDENCE_GATE}`} copy="Review the incident trail and find the pattern hidden in the gaps." action="OPEN ARCHIVE" onClick={() => setTab("evidence")} />
-                  <Card icon={<Users />} title="Personnel" value={`${interviews.length}/${INTERVIEW_GATE}`} copy="Five accounts. Three interviews unlock the final decision gate." action="INTERVIEW" onClick={() => setTab("personnel")} />
-                  <Card icon={<AlertTriangle />} title="Crisis" value={crisis.length ? "RESOLVED" : "LIVE"} copy="Resolve the event to open the next investigation window." action="CRISIS CONTROL" onClick={() => setTab("crisis")} />
-                  <div className="panel nexus-card"><div className="panel-icon"><BrainCircuit /></div><div className="eyebrow">NEXUS</div><h3>Adaptive Intelligence</h3><p>Observation state: <b>ACTIVE</b>. Trust pattern: <b>{trust}</b>.</p><div className="mini-bar"><span style={{ width: `${Math.min(100, Math.max(10, trust * 30))}%` }} /></div></div>
-                  <div className="panel wide-map"><div className="map-title"><div><div className="eyebrow">SECTOR MAP</div><h3>LAGOS • ABUJA • PORT HARCOURT</h3></div><Eye size={19} /></div><div className="map"><span className="node n1">IKEJA</span><span className="node n2">ABUJA</span><span className="node n3">PORT HARCOURT</span><i className="line l1" /><i className="line l2" /><i className="line l3" /></div></div>
-                </div>
-              )}
-
-              {tab === "evidence" && <Evidence reviewed={reviewed} onInspect={inspect} />}
-              {tab === "personnel" && <Personnel interviews={interviews} onInterview={openInterview} />}
-              {tab === "nexus" && <Nexus trust={trust} score={score} onQuestion={() => { setTrust((v) => Math.max(0, v - 1)); addLog("NEXUS QUESTIONED • OBSERVATION MODEL UPDATED.", "warn"); sfx("nexus"); }} />}
-              {tab === "crisis" && <CrisisBoard resolved={crisis} onResolve={resolveCrisis} />}
-              {tab === "final" && <FinalDecision unlocked={finalUnlocked} reviewed={reviewed.length} interviews={interviews.length} crisis={crisis.length} onDecide={submitFinding} finalChoice={finalChoice} />}
-              {tab === "review" && <BoardReview ending={ending} reviewed={reviewed.length} interviews={interviews.length} crisis={crisis.length} score={score} onComplete={completeReview} />}
-            </main>
-          </div>
-        </section>
-      )}
-
-      {phase === "ENDING" && ending && (
-        <section className="ending"><div className="ending-card"><div className="eyebrow">48-HOUR BOARD REVIEW COMPLETE</div><div className="ending-id">ENDING {ending.id}</div><h1>{ending.title}</h1><p>{ending.summary}</p><div className="ending-grid"><div><span>EVIDENCE</span><b>{reviewed.length}</b></div><div><span>INTERVIEWS</span><b>{interviews.length}</b></div><div><span>CRISIS</span><b>{crisis.length}</b></div><div><span>NEXUS TRUST</span><b>{trust}</b></div></div><button className="primary" onClick={() => window.location.reload()}>RESTART CASE</button></div></section>
-      )}
-
-      {currentCharacter && dialogue && (
-        <div className="dialogue-backdrop" onClick={() => setDialogue(null)}>
-          <div className="dialogue" onClick={(e) => e.stopPropagation()}>
-            <div className={`portrait speaking-avatar ${speaking ? "speaking" : ""}`} aria-label={`${currentCharacter.name} speaking`}>
-              <span>{currentCharacter.portrait}</span><i className="mouth" />
-            </div>
-            <div className="dialogue-main">
-              <div className="dialogue-speaker"><div><div className="eyebrow">PERSONNEL INTERVIEW</div><h3>{currentCharacter.name}</h3><span>{currentCharacter.role}</span></div><button className="icon-btn" onClick={() => setDialogue(null)}><X /></button></div>
-              <div className={`voice-state ${speaking ? "live" : ""}`}><Mic2 size={13} /> {speaking ? "VOICE ACTIVE" : "VOICE READY"}</div>
-              <p className={speaking ? "dialogue-speaking" : ""}>{currentText}</p>
-              <div className="dialogue-actions"><button className="secondary small" onClick={() => speak(currentText, currentCharacter.id)}>REPLAY VOICE</button><button className="primary" onClick={nextDialogue}>{dialogue.line + 1 < currentCharacter.dialogue.length ? "CONTINUE" : "CLOSE INTERVIEW"} <ArrowRight size={16} /></button></div>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
+  return <div className="app"><div className="grain"/><header className="topline"><div className="brand">AFTERLIGHT <span>CASE 01 — THE REVIEW</span></div><div className="top-actions"><button className="icon-btn" onClick={toggleAudio} aria-label={audio ? "Mute voice and sound" : "Enable voice and sound"}>{audio ? <Volume2 size={17}/> : <VolumeX size={17}/>}</button><div className="case-pill">NIGHT OPS • 01</div></div></header>
+  {phase === "MENU" && <section className="menu-screen"><div className="menu-card"><div className="eyebrow">NIGERIAN INSTITUTIONAL PSYCHOLOGICAL THRILLER</div><h1>AFTERLIGHT</h1><div className="case-title">CASE 01 <b>THE REVIEW</b></div><p>Investigate sabotage, conflicting accounts, and an intelligence system that may be studying your decisions.</p><div className="menu-actions"><button className="primary" onClick={startCase}><Play size={18} fill="currentColor"/> START CASE</button><button className="secondary" onClick={() => {sfx("click");setPhase("HOWTO");}}>HOW TO PLAY</button></div><div className="menu-meta"><span>48 HOURS</span><span>•</span><span>5 PERSONNEL</span><span>•</span><span>9 EVIDENCE FILES</span></div></div></section>}
+  {phase === "HOWTO" && <section className="howto"><div className="panel wide"><div className="panel-head"><div><div className="eyebrow">OPERATIONS BRIEF</div><h2>HOW TO PLAY</h2></div><button className="icon-btn" onClick={() => setPhase("MENU")}><X/></button></div><div className="how-grid"><div><h3>1 — INVESTIGATE</h3><p>Review evidence, identify contradictions, and inspect the personnel files.</p></div><div><h3>2 — INTERROGATE</h3><p>Question Bayo, Dr. Aisha, Chinedu, Mama Ese and Commissioner Samba.</p></div><div><h3>3 — QUESTION NEXUS</h3><p>Choose when to trust, verify or restrict the system. Nexus records the pattern.</p></div><div><h3>4 — SURVIVE THE CRISIS</h3><p>Resolve a live event, unlock deeper evidence, then prepare the Board finding.</p></div><div><h3>5 — READ THE ROOM</h3><p>Watch Public Trust, evidence strength, personnel confidence and Nexus reliance.</p></div><div><h3>6 — MAKE THE CALL</h3><p>Reach the decision threshold and submit one of four final findings.</p></div></div><button className="primary" onClick={() => setPhase("MENU")}>RETURN TO CASE</button></div></section>}
+  {phase === "TACTICAL" && <section className="tactical"><div className="hud"><div><span className="status-dot"/> INVESTIGATION ACTIVE</div><div className="hud-stats"><span>TIME <b>{hours}H</b></span><span>EVIDENCE <b>{reviewed.length}/{EVIDENCE_GATE}</b></span><span>INTERVIEWS <b>{interviews.length}/{INTERVIEW_GATE}</b></span></div></div><div className="layout"><aside className="sidebar"><div className="side-brand"><Gauge/><span>COMMAND</span></div>{([['dashboard','Command Dashboard',Gauge],['evidence','Evidence Archive',FileSearch],['personnel','Personnel',Users],['nexus','Nexus Interface',BrainCircuit],['crisis','Crisis Control',AlertTriangle],['final','Final Decision',ShieldCheck],['review','Board Review',Lock]] as [Tab,string,any][]).map(([id,label,Icon]) => <button key={id} className={`nav ${tab===id?"active":""}`} onClick={()=>{sfx("click");setTab(id)}}><Icon size={16}/>{label}</button>)}<div className="side-log"><div className="eyebrow">LIVE LOG</div>{logs.length?logs.map((l,i)=><div className={`log ${l.tone}`} key={i}>{l.text}</div>):<div className="log">No event logged.</div>}</div></aside><main className="main"><div className="hero-strip"><div><div className="eyebrow">AFTERLIGHT / FEDERAL RESPONSE CELL</div><h2>{dashboardTitle}</h2></div><div className="case-state"><span>CASE STATE</span><b>{crisis.length?"CRISIS CONTAINED":"PRIMARY INVESTIGATION"}</b></div></div>
+  {tab === "dashboard" && <div className="dash-grid"><Card icon={<FileSearch/>} title="Evidence" value={`${reviewed.length}/${EVIDENCE_GATE}`} copy="Review the incident trail and find the pattern hidden in the gaps." action="OPEN ARCHIVE" onClick={()=>setTab("evidence")}/><Card icon={<Users/>} title="Personnel" value={`${interviews.length}/${INTERVIEW_GATE}`} copy="Five accounts. Three interviews unlock the final decision gate." action="INTERVIEW" onClick={()=>setTab("personnel")}/><Card icon={<AlertTriangle/>} title="Crisis" value={crisis.length?"RESOLVED":"LIVE"} copy="Resolve the event to open the next investigation window." action="CRISIS CONTROL" onClick={()=>setTab("crisis")}/><div className="panel nexus-card"><div className="panel-icon"><BrainCircuit/></div><div className="eyebrow">NEXUS</div><h3>Adaptive Intelligence</h3><p>Observation state: <b>ACTIVE</b>. Trust pattern: <b>{trust}</b>.</p><div className="mini-bar"><span style={{width:`${Math.min(100,Math.max(10,trust*30))}%`}}/></div></div><div className="panel wide-map"><div className="map-title"><div><div className="eyebrow">SECTOR MAP</div><h3>LAGOS • ABUJA • PORT HARCOURT</h3></div><Eye size={19}/></div><div className="map"><span className="node n1">IKEJA</span><span className="node n2">ABUJA</span><span className="node n3">PORT HARCOURT</span><i className="line l1"/><i className="line l2"/><i className="line l3"/></div></div></div>}
+  {tab === "evidence" && <Evidence reviewed={reviewed} onInspect={inspect}/>} {tab === "personnel" && <Personnel interviews={interviews} onInterview={openInterview}/>} {tab === "nexus" && <Nexus trust={trust} score={score} onQuestion={()=>{setTrust(v=>Math.max(0,v-1));addLog("NEXUS QUESTIONED • OBSERVATION MODEL UPDATED.","warn");sfx("nexus");}}/>} {tab === "crisis" && <CrisisBoard resolved={crisis} onResolve={resolveCrisis}/>} {tab === "final" && <FinalDecision unlocked={finalUnlocked} reviewed={reviewed.length} interviews={interviews.length} crisis={crisis.length} onDecide={submitFinding} finalChoice={finalChoice}/>} {tab === "review" && <BoardReview ending={ending} reviewed={reviewed.length} interviews={interviews.length} crisis={crisis.length} score={score} onComplete={completeReview}/>}</main></div></section>}
+  {phase === "ENDING" && ending && <section className="ending"><div className="ending-card"><div className="eyebrow">48-HOUR BOARD REVIEW COMPLETE</div><div className="ending-id">ENDING {ending.id}</div><h1>{ending.title}</h1><p>{ending.summary}</p><div className="ending-grid"><div><span>EVIDENCE</span><b>{reviewed.length}</b></div><div><span>INTERVIEWS</span><b>{interviews.length}</b></div><div><span>CRISIS</span><b>{crisis.length}</b></div><div><span>NEXUS TRUST</span><b>{trust}</b></div></div><button className="primary" onClick={()=>window.location.reload()}>RESTART CASE</button></div></section>}
+  {currentCharacter && dialogue && <div className="dialogue-backdrop" onClick={()=>setDialogue(null)}><div className="dialogue" onClick={e=>e.stopPropagation()}><div className={`portrait speaking-avatar ${speaking?"speaking":""}`}><span>{currentCharacter.portrait}</span><i className="mouth"/></div><div className="dialogue-main"><div className="dialogue-speaker"><div><div className="eyebrow">PERSONNEL INTERVIEW</div><h3>{currentCharacter.name}</h3><span>{currentCharacter.role}</span></div><button className="icon-btn" onClick={()=>setDialogue(null)}><X/></button></div><div className={`voice-state ${speaking?"live":""}`}><Mic2 size={13}/> {speaking?"VOICE ACTIVE":"VOICE READY"}</div><p className={speaking?"dialogue-speaking":""}>{currentText}</p><div className="dialogue-actions"><button className="secondary small" onClick={()=>speak(currentText,currentCharacter.id)}>REPLAY VOICE</button><button className="primary" onClick={nextDialogue}>{dialogue.line+1<currentCharacter.dialogue.length?"CONTINUE":"CLOSE INTERVIEW"}<ArrowRight size={16}/></button></div></div></div></div>}
+  </div>;
 }
 
-function Card({ icon, title, value, copy, action, onClick }: { icon: React.ReactNode; title: string; value: string; copy: string; action: string; onClick: () => void }) {
-  return <div className="panel action-card"><div className="panel-icon">{icon}</div><div className="eyebrow">CASE MODULE</div><h3>{title}</h3><div className="metric">{value}</div><p>{copy}</p><button className="secondary small" onClick={() => { sfx("click"); onClick(); }}>{action}<ArrowRight size={14} /></button></div>;
-}
-
-function Evidence({ reviewed, onInspect }: { reviewed: string[]; onInspect: (id: string) => void }) {
-  return <div className="list-grid">{EVIDENCE.map((e) => <article className={`panel evidence ${reviewed.includes(e.id) ? "seen" : ""}`} key={e.id}><div className="evidence-top"><span className="evidence-code">EV-{e.id.slice(0, 3).toUpperCase()}</span><span>{reviewed.includes(e.id) ? "REVIEWED" : "UNREVIEWED"}</span></div><h3>{e.title}</h3><p>{e.summary}</p><button className="secondary small" onClick={() => onInspect(e.id)}>{reviewed.includes(e.id) ? "REOPEN FILE" : "INSPECT"} <ArrowRight size={14} /></button>{reviewed.includes(e.id) && <div className="detail">{e.detail}</div>}</article>)}</div>;
-}
-
-function Personnel({ interviews, onInterview }: { interviews: string[]; onInterview: (id: string) => void }) {
-  return <div className="people-grid">{CHARACTERS.map((c: CharacterCase) => <article className={`panel person ${interviews.includes(c.id) ? "interviewed" : ""}`} key={c.id}><div className="portrait mini">{c.portrait}</div><div className="eyebrow">{c.origin}</div><h3>{c.name}</h3><p className="role">{c.role}</p><p>{c.tagline}</p><button className="secondary small" onClick={() => onInterview(c.id)}>{interviews.includes(c.id) ? "REVIEW INTERVIEW" : "OPEN INTERVIEW"} <Mic2 size={14} /></button></article>)}</div>;
-}
-
-function Nexus({ trust, score, onQuestion }: { trust: number; score: number; onQuestion: () => void }) {
-  return <div className="nexus-layout"><div className="panel nexus-main"><div className="nexus-orb"><BrainCircuit size={44} /></div><div className="eyebrow">SYNTHETIC ADVISORY LAYER</div><h3>HELLO, INVESTIGATOR.</h3><p>Nexus remains useful. It is also recording how quickly you accept its conclusions.</p><blockquote>“You are reviewing the crisis. I am reviewing your review.”</blockquote><button className="primary" onClick={onQuestion}>QUESTION NEXUS</button></div><div className="panel"><div className="eyebrow">CURRENT MODEL</div><div className="nexus-stat"><span>Trust</span><b>{trust}</b></div><div className="nexus-stat"><span>Case score</span><b>{score}</b></div><div className="nexus-stat"><span>Observation</span><b>ACTIVE</b></div></div></div>;
-}
-
-function CrisisBoard({ resolved, onResolve }: { resolved: string[]; onResolve: (crisisId: string, optionId: string, effect: number, result: string) => void }) {
-  return <div className="crisis-grid">{CRISES.map((c) => <article className={`panel crisis ${resolved.includes(c.id) ? "resolved" : ""}`} key={c.id}><div className="eyebrow">{c.location}</div><h3>{c.title}</h3><p>{c.summary}</p>{resolved.includes(c.id) ? <div className="resolved-badge"><ShieldCheck size={16} /> CRISIS RESOLVED • INVESTIGATION WINDOW OPEN</div> : <div className="choices">{c.options.map((o) => <button key={o.id} className="secondary choice" onClick={() => onResolve(c.id, o.id, o.effect, o.result)}><span>{o.label}</span><ArrowRight size={14} /></button>)}</div>}</article>)}</div>;
-}
-
-function FinalDecision({ unlocked, reviewed, interviews, crisis, onDecide, finalChoice }: { unlocked: boolean; reviewed: number; interviews: number; crisis: number; onDecide: (id: string) => void; finalChoice: string | null }) {
-  return <div className="panel final-panel"><div className="eyebrow">DECISION GATE</div><h3>Choose what the evidence says.</h3><p>The final finding is a statement of accountability. Nexus will record which one you chose.</p><div className="gate"><div>Evidence <b>{reviewed}/{EVIDENCE_GATE}</b></div><div>Interviews <b>{interviews}/{INTERVIEW_GATE}</b></div><div>Crisis <b>{crisis}/1+</b></div></div><div className="final-options">{FINAL_FINDINGS.map((f) => <button key={f.id} disabled={!unlocked} className={`final-choice ${finalChoice === f.id ? "selected" : ""}`} onClick={() => onDecide(f.id)}><span>{f.label}</span><small>{f.desc}</small></button>)}</div>{!unlocked && <div className="gate-note">LOCKED • Continue investigating until the evidence, interview and crisis thresholds are met.</div>}</div>;
-}
-
-function BoardReview({ ending, reviewed, interviews, crisis, score, onComplete }: { ending: { id: string; title: string; summary: string } | null; reviewed: number; interviews: number; crisis: number; score: number; onComplete: () => void }) {
-  return <div className="review-grid"><div className="panel"><div className="eyebrow">BOARD OUTCOME</div><div className="ending-id">{ending ? `ENDING ${ending.id}` : "PENDING"}</div><h3>{ending ? ending.title : "Finding Required"}</h3><p>{ending ? ending.summary : "Return to FINAL DECISION and submit a finding."}</p>{ending && <button className="primary" onClick={onComplete}>ACCEPT BOARD VERDICT</button>}</div><div className="panel"><div className="eyebrow">AUDIT SNAPSHOT</div>{[["Evidence reviewed", reviewed],["Interviews", interviews],["Crisis events", crisis],["Investigation score", score]].map(([k, v]) => <div className="snapshot" key={String(k)}><span>{k}</span><b>{v}</b></div>)}</div></div>;
-}
+function Card({icon,title,value,copy,action,onClick}:{icon:ReactNode;title:string;value:string;copy:string;action:string;onClick:()=>void}){return <div className="panel action-card"><div className="panel-icon">{icon}</div><div className="eyebrow">CASE MODULE</div><h3>{title}</h3><div className="metric">{value}</div><p>{copy}</p><button className="secondary small" onClick={()=>{sfx("click");onClick()}}>{action}<ArrowRight size={14}/></button></div>}
+function Evidence({reviewed,onInspect}:{reviewed:string[];onInspect:(id:string)=>void}){return <div className="list-grid">{EVIDENCE.map(e=><article className={`panel evidence ${reviewed.includes(e.id)?"seen":""}`} key={e.id}><div className="evidence-top"><span className="evidence-code">EV-{e.id.slice(0,3).toUpperCase()}</span><span>{reviewed.includes(e.id)?"REVIEWED":"UNREVIEWED"}</span></div><h3>{e.title}</h3><p>{e.summary}</p><button className="secondary small" onClick={()=>onInspect(e.id)}>{reviewed.includes(e.id)?"REOPEN FILE":"INSPECT"}<ArrowRight size={14}/></button>{reviewed.includes(e.id)&&<div className="detail">{e.detail}</div>}</article>)}</div>}
+function Personnel({interviews,onInterview}:{interviews:string[];onInterview:(id:string)=>void}){return <div className="people-grid">{CHARACTERS.map(c=><article className={`panel person ${interviews.includes(c.id)?"interviewed":""}`} key={c.id}><div className="portrait mini">{c.portrait}</div><div className="eyebrow">{c.origin}</div><h3>{c.name}</h3><p className="role">{c.role}</p><p>{c.tagline}</p><button className="secondary small" onClick={()=>onInterview(c.id)}>{interviews.includes(c.id)?"REVIEW INTERVIEW":"OPEN INTERVIEW"}<Mic2 size={14}/></button></article>)}</div>}
+function Nexus({trust,score,onQuestion}:{trust:number;score:number;onQuestion:()=>void}){return <div className="nexus-layout"><div className="panel nexus-main"><div className="nexus-orb"><BrainCircuit size={44}/></div><div className="eyebrow">SYNTHETIC ADVISORY LAYER</div><h3>HELLO, INVESTIGATOR.</h3><p>Nexus remains useful. It is also recording how quickly you accept its conclusions.</p><blockquote>“You are reviewing the crisis. I am reviewing your review.”</blockquote><button className="primary" onClick={onQuestion}>QUESTION NEXUS</button></div><div className="panel"><div className="eyebrow">CURRENT MODEL</div><div className="nexus-stat"><span>Trust</span><b>{trust}</b></div><div className="nexus-stat"><span>Case score</span><b>{score}</b></div><div className="nexus-stat"><span>Observation</span><b>ACTIVE</b></div></div></div>}
+function CrisisBoard({resolved,onResolve}:{resolved:string[];onResolve:(crisisId:string,optionId:string,effect:number,result:string)=>void}){return <div className="crisis-grid">{CRISES.map(c=><article className={`panel crisis ${resolved.includes(c.id)?"resolved":""}`} key={c.id}><div className="eyebrow">{c.location}</div><h3>{c.title}</h3><p>{c.summary}</p>{resolved.includes(c.id)?<div className="resolved-badge"><ShieldCheck size={16}/> CRISIS RESOLVED • INVESTIGATION WINDOW OPEN</div>:<div className="choices">{c.options.map(o=><button key={o.id} className="secondary choice" onClick={()=>onResolve(c.id,o.id,o.effect,o.result)}><span>{o.label}</span><ArrowRight size={14}/></button>)}</div>}</article>)}</div>}
+function FinalDecision({unlocked,reviewed,interviews,crisis,onDecide,finalChoice}:{unlocked:boolean;reviewed:number;interviews:number;crisis:number;onDecide:(id:string)=>void;finalChoice:string|null}){return <div className="panel final-panel"><div className="eyebrow">DECISION GATE</div><h3>Choose what the evidence says.</h3><p>The final finding is a statement of accountability. Nexus will record which one you chose.</p><div className="gate"><div>Evidence <b>{reviewed}/{EVIDENCE_GATE}</b></div><div>Interviews <b>{interviews}/{INTERVIEW_GATE}</b></div><div>Crisis <b>{crisis}/1+</b></div></div><div className="final-options">{FINAL_FINDINGS.map(f=><button key={f.id} disabled={!unlocked} className={`final-choice ${finalChoice===f.id?"selected":""}`} onClick={()=>onDecide(f.id)}><span>{f.label}</span><small>{f.desc}</small></button>)}</div>{!unlocked&&<div className="gate-note">LOCKED • Continue investigating until the evidence, interview and crisis thresholds are met.</div>}</div>}
+function BoardReview({ending,reviewed,interviews,crisis,score,onComplete}:{ending:{id:string;title:string;summary:string}|null;reviewed:number;interviews:number;crisis:number;score:number;onComplete:()=>void}){return <div className="review-grid"><div className="panel"><div className="eyebrow">BOARD OUTCOME</div><div className="ending-id">{ending?`ENDING ${ending.id}`:"PENDING"}</div><h3>{ending?ending.title:"Finding Required"}</h3><p>{ending?ending.summary:"Return to FINAL DECISION and submit a finding."}</p>{ending&&<button className="primary" onClick={onComplete}>ACCEPT BOARD VERDICT</button>}</div><div className="panel"><div className="eyebrow">AUDIT SNAPSHOT</div>{[["Evidence reviewed",reviewed],["Interviews",interviews],["Crisis events",crisis],["Investigation score",score]].map(([k,v])=><div className="snapshot" key={String(k)}><span>{k}</span><b>{v}</b></div>)}</div></div>}
