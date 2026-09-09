@@ -1,0 +1,4 @@
+let enabled=true; let ctx:AudioContext|undefined;
+function ac(){if(!ctx)ctx=new AudioContext(); return ctx;}
+export function setAudio(v:boolean){enabled=v;if(!v)ctx?.close();}
+export function sfx(kind:'click'|'good'|'bad'|'alert'|'nexus'|'evidence'|'finish'='click'){if(!enabled)return; try{const c=ac(); const o=c.createOscillator(); const g=c.createGain(); o.connect(g);g.connect(c.destination); const map={click:[360,.05],good:[660,.12],bad:[160,.16],alert:[110,.22],nexus:[520,.18],evidence:[780,.10],finish:[880,.22]} as const; const [f,d]=map[kind];o.frequency.value=f;o.type=kind==='nexus'?'sine':'triangle';g.gain.setValueAtTime(.0001,c.currentTime);g.gain.exponentialRampToValueAtTime(.05,c.currentTime+.01);g.gain.exponentialRampToValueAtTime(.0001,c.currentTime+d);o.start();o.stop(c.currentTime+d+.02);}catch{}}
